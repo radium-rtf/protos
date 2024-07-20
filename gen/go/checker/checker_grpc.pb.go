@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CheckerClient interface {
-	Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (Checker_CheckClient, error)
+	Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckResponse, error)
 }
 
 type checkerClient struct {
@@ -33,43 +33,20 @@ func NewCheckerClient(cc grpc.ClientConnInterface) CheckerClient {
 	return &checkerClient{cc}
 }
 
-func (c *checkerClient) Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (Checker_CheckClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Checker_ServiceDesc.Streams[0], "/checker.checker/Check", opts...)
+func (c *checkerClient) Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckResponse, error) {
+	out := new(CheckResponse)
+	err := c.cc.Invoke(ctx, "/checker.checker/Check", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &checkerCheckClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Checker_CheckClient interface {
-	Recv() (*TestResult, error)
-	grpc.ClientStream
-}
-
-type checkerCheckClient struct {
-	grpc.ClientStream
-}
-
-func (x *checkerCheckClient) Recv() (*TestResult, error) {
-	m := new(TestResult)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+	return out, nil
 }
 
 // CheckerServer is the server API for Checker service.
 // All implementations must embed UnimplementedCheckerServer
 // for forward compatibility
 type CheckerServer interface {
-	Check(*CheckRequest, Checker_CheckServer) error
+	Check(context.Context, *CheckRequest) (*CheckResponse, error)
 	mustEmbedUnimplementedCheckerServer()
 }
 
@@ -77,8 +54,8 @@ type CheckerServer interface {
 type UnimplementedCheckerServer struct {
 }
 
-func (UnimplementedCheckerServer) Check(*CheckRequest, Checker_CheckServer) error {
-	return status.Errorf(codes.Unimplemented, "method Check not implemented")
+func (UnimplementedCheckerServer) Check(context.Context, *CheckRequest) (*CheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Check not implemented")
 }
 func (UnimplementedCheckerServer) mustEmbedUnimplementedCheckerServer() {}
 
@@ -93,25 +70,22 @@ func RegisterCheckerServer(s grpc.ServiceRegistrar, srv CheckerServer) {
 	s.RegisterService(&Checker_ServiceDesc, srv)
 }
 
-func _Checker_Check_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(CheckRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func _Checker_Check_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	return srv.(CheckerServer).Check(m, &checkerCheckServer{stream})
-}
-
-type Checker_CheckServer interface {
-	Send(*TestResult) error
-	grpc.ServerStream
-}
-
-type checkerCheckServer struct {
-	grpc.ServerStream
-}
-
-func (x *checkerCheckServer) Send(m *TestResult) error {
-	return x.ServerStream.SendMsg(m)
+	if interceptor == nil {
+		return srv.(CheckerServer).Check(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/checker.checker/Check",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CheckerServer).Check(ctx, req.(*CheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 // Checker_ServiceDesc is the grpc.ServiceDesc for Checker service.
@@ -120,13 +94,12 @@ func (x *checkerCheckServer) Send(m *TestResult) error {
 var Checker_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "checker.checker",
 	HandlerType: (*CheckerServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "Check",
-			Handler:       _Checker_Check_Handler,
-			ServerStreams: true,
+			MethodName: "Check",
+			Handler:    _Checker_Check_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "checker/checker.proto",
 }
