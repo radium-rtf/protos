@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+option go_package="./;checker";
+
+package checker;
+
+message TestCase {
+    string input = 1;
+    string output = 2;
+}
+
+message CheckRequest {
+    string code = 1;
+    repeated TestCase tests = 2;
+}
+
+message TestResult {
+    int64 exit_code = 1;
+    string stdout = 2;
+    string stderr = 3;
+    int64 duration = 4;
+    bool timeout = 5;
+    bool oom_killed = 6;
+}
+
+service checker {
+    rpc Check(CheckRequest) returns (stream TestResult) {}
+}
